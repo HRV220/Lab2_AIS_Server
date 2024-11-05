@@ -13,45 +13,46 @@ class Server
 
     public static async Task Main(string[] args)
     {
-        var config = new NLog.Config.LoggingConfiguration();
+            var config = new NLog.Config.LoggingConfiguration();
 
-        // Targets where to log to: File and Console
-        var logfile = new NLog.Targets.FileTarget("logfile") { FileName = "logs.txt" };
-        var logconsole = new NLog.Targets.ConsoleTarget("logconsole");
+            // Targets where to log to: File and Console
+            var logfile = new NLog.Targets.FileTarget("logfile") { FileName = "logs.txt" };
+            var logconsole = new NLog.Targets.ConsoleTarget("logconsole");
 
-        // Rules for mapping loggers to targets            
-        config.AddRule(LogLevel.Info, LogLevel.Fatal, logconsole);
-        config.AddRule(LogLevel.Debug, LogLevel.Fatal, logfile);
+            // Rules for mapping loggers to targets            
+            config.AddRule(LogLevel.Info, LogLevel.Fatal, logconsole);
+            config.AddRule(LogLevel.Debug, LogLevel.Fatal, logfile);
 
-        // Apply config           
-        NLog.LogManager.Configuration = config;
+            // Apply config           
+            NLog.LogManager.Configuration = config;
 
-        UdpClient udpClient = new UdpClient(8080);
-        logger.Info("Сервер запущен и ожидает запросов.");
+            UdpClient udpClient = new UdpClient(8080);
+            logger.Info("Сервер запущен и ожидает запросов.");
 
-        try
-        {
-            while (true)
+            try
             {
-                var receivedResult = await udpClient.ReceiveAsync();
-                string[] request = Encoding.UTF8.GetString(receivedResult.Buffer).Split(":");
-                logger.Info($"Получен запрос: {request}");
+                while (true)
+                {
+                    var receivedResult = await udpClient.ReceiveAsync();
+                    string[] request = Encoding.UTF8.GetString(receivedResult.Buffer).Split(":");
+                    logger.Info($"Получен запрос: {request}");
 
-                string response = ProcessRequest(request);
-                byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+                    string response = ProcessRequest(request);
+                    byte[] responseBytes = Encoding.UTF8.GetBytes(response);
 
-                await udpClient.SendAsync(responseBytes, responseBytes.Length, receivedResult.RemoteEndPoint);
-                logger.Info("Ответ отправлен клиенту.");
+                    await udpClient.SendAsync(responseBytes, responseBytes.Length, receivedResult.RemoteEndPoint);
+                    logger.Info("Ответ отправлен клиенту.");
+                }
             }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-        }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
     }
 
     private static string ProcessRequest(string[] request)
     {
+        int num_str_in_file = CountLinesInFile(@"D:\text.csv");
         if (request[0] == "get_all_data")
         {
             logger.Info("Запрос на получение всех данных.");
@@ -59,15 +60,32 @@ class Server
         }
         else if (request[0] == "get_str")
         {
-            int recordId = int.Parse(request[1]);
-            logger.Info($"Запрос на получение записи с номером {recordId}.");
-            return GetRecord(recordId);
+            int recordId;
+            if (int.TryParse(request[1], out recordId) && recordId <= num_str_in_file && recordId > 0)
+            {
+                logger.Info($"Запрос на получение записи с номером {recordId}.");
+                return GetRecord(recordId);
+            }
+            else
+            {
+                logger.Warn($"Запись с номером {request[1]} не существует");
+                return "Неверный формат данных";
+            }
+                
         }
         else if (request[0] == "del_str")
         {
-            int recordId = int.Parse(request[1]);
-            logger.Info($"Запрос на удаление записи с номером {recordId}.");
-            return DeleteRecord(recordId);
+            int recordId;
+            if (int.TryParse(request[1], out recordId) && recordId <= num_str_in_file && recordId > 0)
+            {
+                logger.Info($"Запрос на получение записи с номером {recordId}.");
+                return GetRecord(recordId);
+            }
+            else
+            {
+                logger.Warn($"Запись с номером {request[1]} не существует");
+                return "Неверный формат данных";
+            }
         }
         else if (request[0] == "add_str")
         {
@@ -80,6 +98,28 @@ class Server
             logger.Warn("Неизвестный запрос.");
             return "Unknown command";
         }
+    }
+
+    public static int CountLinesInFile(string filePath)
+    {
+        int lineCount = 0;
+
+        try
+        {
+            using (StreamReader sr = new StreamReader(filePath))
+            {
+                while (sr.ReadLine() != null)
+                {
+                    lineCount++;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Произошла ошибка: {ex.Message}");
+        }
+
+        return lineCount;
     }
 
     public static string DeleteRecord(int line_num)
